@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head class="banner">
+    <link rel="stylesheet" href="./style.css">
+    <script type="module" src="./index.js"></script>
+    <script type="module" src="https://cdn.jsdelivr.net/npm/zero-md@3?register"></script>
+    <link rel="icon" type="image/png" href="./favicon.png">
+    <title>Visualization Exercise</title>
+</head>
+
+<body class="content">
+<main>
+    <h2>Assignment 3</h2>
+    <div id="visualization">
+        <!--   YOUR SVGs HERE   -->
+    </div>
+
+    <section>
+        <h3>Parallel Coordinates, Parallel Sets and Time Series</h3>
+        <p>
+            In the past lectures, you have been introduced to parallel coordinates and parallel sets, as well as different techniques for visualizing time series data.
+            In this assignment, you're going to visualize weather data using these types of visualizations and connect them using interaction techniques.
+        </p>
+        <p>
+            The weather and stations data is loaded already from the corresponding files in the <span class="monospace">index.js</span>,
+            and printed to the console. Look carefully at the available data and analyze its attributes to make the
+            best decisions for your design that will allow you to answer the given questions.
+        </p>
+    </section>
+
+
+    <section>
+        <div class="task">
+            <h3>Task: Create a coordinated multi-view to analyze the weather data.</h3>
+            <p>
+                It is your task to design and implement the visualization system that allows the user to answer the
+                following questions:
+            <ol>
+                <li>
+                    In which year and in which weather station has the lowest temperature been recorded?
+                </li>
+                <li>
+                    Are there time-based patterns regarding humidity?
+                </li>
+                <li>
+                    Is there some kind of relation between temperature and humidity?
+                </li>
+                <li>
+                    a) Is air pressure lower by the sea or at continental locations?<br/>
+                    b) Is there a difference in air pressure between sea-level stations and mountain-based stations?
+                </li>
+            </ol>
+            Add any elements that may be necessary in this HTML, in the #visualization div on top.
+            </p>
+
+            <p>
+            <h4>System requirements</h4>
+            Your visualization system should have the following features:
+            <ol>
+                <li>
+                    A parallel coordinate system (20%).
+                </li>
+                <li>
+                    A parallel sets plot (20%).
+                </li>
+                <li>
+                    A suitable time visualization (20%).
+                </li>
+                <li>
+                    Connect the visualizations with brushing and linking (10%).
+                </li>
+                <li>
+                    Filtering items by attribute (10%).
+                </li>
+            </ol>
+
+            <h4>Support your decisions</h4>
+            <ol>
+                <li>Describe the marks and channels of each visualization in the <b>marks_and_channels.md</b> (5%).</li>
+                <li>Explain your decisions (the type of time series visualization, or the attributes you plotted in the parallel coordinates and parallel sets) in <b>design_choices.md</b> (5%).</li>
+                <li>
+                    Answer the 4 questions numbered in the task, explaining how did you find them in your visualization. Write the answers in the <b>answers.md</b> (10%).
+                </li>
+            </ol>
+            </p>
+        </div>
+    </section>
+
+    <section>
+        <zero-md src="marks_and_channels.md">
+            <template>
+                <link rel="stylesheet" href="./style.css"/>
+            </template>
+        </zero-md>
+        <zero-md src="design_choices.md">
+            <template>
+                <link rel="stylesheet" href="./style.css"/>
+            </template>
+        </zero-md>
+        <zero-md src="answers.md">
+            <template>
+                <link rel="stylesheet" href="./style.css"/>
+            </template>
+        </zero-md>
+    </section>
+
+</main>
+</body>
+
+
+</html>
