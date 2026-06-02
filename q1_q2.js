@@ -64,14 +64,20 @@ export function createTimeSeries(dailyClimateData, stationData) {
     // Extract Station Map for the Top Chart (Q1 still needs individual station tracking)
     const stationMap = new Map(stationData.map(s => [s.STATION_ID, s.STATION_NAME]));
     const nestedStationData = d3.groups(dailyClimateData, d => d.STATION_ID).map(([stationId, days]) => {
-        const monthlyGroups = d3.groups(days, d => `${d.DATE.getFullYear()}-${String(d.DATE.getMonth() + 1).padStart(2, '0')}`);
-        const history = monthlyGroups.map(([ym, records]) => {
-            const [y, m] = ym.split("-").map(Number);
+
+        // 1. Group strictly by the 4-digit Year (e.g., 2011, 2012)
+        const yearlyGroups = d3.groups(days, d => d.DATE.getFullYear());
+
+        // 2. Map over each year to extract the absolute lowest temperature night
+        const history = yearlyGroups.map(([year, records]) => {
             return {
-                date: new Date(y, m - 1, 1),
+                // Set the date coordinate to Jan 1st of that year for clean scale placement
+                date: new Date(year, 0, 1),
+
+                // This keeps your data integrity safe by picking the single coldest day of that entire year!
                 minTemp: d3.min(records, r => r.TEMPERATURE_AIR_MIN)
             };
-        }).sort((a, b) => a.date - b.date);
+        }).sort((a, b) => a.date - b.date); // Keep them in chronological order
 
         return { stationId, stationName: stationMap.get(stationId), history };
     });
@@ -105,8 +111,12 @@ export function createTimeSeries(dailyClimateData, stationData) {
         .domain(d3.extent(dailyClimateData, d => d.DATE))
         .range([0, width]);
 
+    // Calculate the absolute lowest and highest values present in our yearly roll-up
+    const absoluteMinTemp = d3.min(nestedStationData, s => d3.min(s.history, h => h.minTemp));
+    const absoluteMaxTemp = d3.max(nestedStationData, s => d3.max(s.history, h => h.minTemp));
+
     const yTempScale = d3.scaleLinear()
-        .domain([d3.min(dailyClimateData, d => d.TEMPERATURE_AIR_MIN) - 2, d3.max(dailyClimateData, d => d.TEMPERATURE_AIR_MIN) + 2])
+        .domain([absoluteMinTemp - 2, absoluteMaxTemp + 2]) // Adds a clean 2°C breathing room pad at the top and bottom
         .range([height, 0]);
 
     // Optimize the Y-axis range specifically for seasonal humidity means
@@ -254,9 +264,9 @@ export function createTimeSeries(dailyClimateData, stationData) {
             .attr("fill", "transparent")
             .style("cursor", "pointer")
             .style("pointer-events", "all")
-            .on("mouseenter", function(event, d) {
+            .on("mouseenter", function (event, d) {
                 d3.selectAll(".humid-target-highlight").remove();
-        
+
                 humidGroup.append("circle")
                     .attr("class", "humid-target-highlight")
                     .attr("cx", xScale(d.date))
@@ -266,7 +276,7 @@ export function createTimeSeries(dailyClimateData, stationData) {
                     .attr("stroke", "#333")
                     .attr("stroke-width", 2)
                     .attr("clip-path", "url(#chart-clip)");
-        
+
                 d3.select("#chart-tooltip")
                     .style("opacity", 1)
                     .html(`<strong>Season: ${d.season}</strong><br/>
@@ -276,7 +286,7 @@ export function createTimeSeries(dailyClimateData, stationData) {
                     .style("top", (event.pageY - 15) + "px");
             })
             // --- HOVER OUT: HIDE TOOLTIP AND RING ---
-            .on("mouseleave", function() {
+            .on("mouseleave", function () {
                 d3.selectAll(".humid-target-highlight").remove();
                 d3.select("#chart-tooltip").style("opacity", 0);
             });
