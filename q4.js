@@ -176,8 +176,18 @@ export function createParallelSets(dailyClimateData, stationData) {
         .attr("fill-opacity", 0.5)
         .attr("stroke", "none");
 
-    linkPaths.append("title")
-        .text(d => `${d.source.name} → ${d.target.name}\n${d.value.toLocaleString()} records (${((d.value / totalRecords) * 100).toFixed(1)}% of total)\n(From ${d.pressureCategory})`);
+    linkPaths.on("mousemove", function(event, d) {
+            d3.select("#chart-tooltip")
+                .style("opacity", 1)
+                .html(`<strong>${d.source.name} &rarr; ${d.target.name}</strong><br/>
+                       ${d.value.toLocaleString()} records (${((d.value / totalRecords) * 100).toFixed(1)}%)<br/>
+                       <em>(From ${d.pressureCategory})</em>`)
+                .style("left", (event.pageX + 15) + "px")
+                .style("top", (event.pageY - 28) + "px");
+        })
+        .on("mouseout", function() {
+            d3.select("#chart-tooltip").style("opacity", 0);
+        });
 
     // -------------------------------------------------------------------------
     // 6. DRAW NODES (RECTANGLES) & INTERACTION
@@ -199,6 +209,18 @@ export function createParallelSets(dailyClimateData, stationData) {
         .data(sankeyNodes)
         .join("g")
         .style("cursor", "pointer")
+        .on("mousemove", function(event, d) {
+            d3.select("#chart-tooltip")
+                .style("opacity", 1)
+                .html(`<strong>${d.name}</strong><br/>
+                       ${d.value.toLocaleString()} records (${((d.value / totalRecords) * 100).toFixed(1)}%)<br/>
+                       <em>Click to filter</em>`)
+                .style("left", (event.pageX + 15) + "px")
+                .style("top", (event.pageY - 28) + "px");
+        })
+        .on("mouseout", function() {
+            d3.select("#chart-tooltip").style("opacity", 0);
+        })
         .on("click", function(event, d) {
             // Toggle selection logic
             if (selectedNode === d.name) {
@@ -233,9 +255,7 @@ export function createParallelSets(dailyClimateData, stationData) {
         .attr("width", d => d.y1 - d.y0)
         .attr("height", d => d.x1 - d.x0)
         .attr("fill", d => color(d.name))
-        .attr("stroke", "#333")
-        .append("title")
-        .text(d => `Click to filter: ${d.name}\n${d.value.toLocaleString()} records (${((d.value / totalRecords) * 100).toFixed(1)}% of total)`);
+        .attr("stroke", "#333");
 
     node.append("text")
         // Center text horizontally on the node
