@@ -4,7 +4,29 @@ export function createParallelCoordinates(dailyClimateData, stationData) {
     // -------------------------------------------------------------------------
     // 1. DATA PRE-PROCESSING
     // -------------------------------------------------------------------------
-    const stationMap = new Map(stationData.map(s => [s.STATION_ID, s.STATION_NAME]));
+    const stationMap = new Map(stationData.map(s => [s.STATION_ID, s]));
+
+    function getPressureCat(pressure) {
+        if (pressure < 980) return "Low Pressure";
+        if (pressure <= 1013) return "Medium Pressure";
+        return "High Pressure";
+    }
+
+    function getLocationCat(station) {
+        return station.DISTANCE_TO_SEA_KM < 100 ? "Coastal" : "Continental";
+    }
+    
+    function getElevationCat(station) {
+        return station.HEIGHT_ABOVE_SEA_LEVEL_M < 200 ? "Lowland" : "Mountain";
+    }
+
+    function getSeason(monthStr) {
+        const month = parseInt(monthStr, 10) - 1;
+        if (month === 11 || month === 0 || month === 1) return "Winter";
+        if (month >= 2 && month <= 4) return "Spring";
+        if (month >= 5 && month <= 7) return "Summer";
+        return "Autumn";
+    }
 
     // Aggregate daily data into monthly averages
     const nestedData = d3.groups(dailyClimateData,
@@ -14,7 +36,10 @@ export function createParallelCoordinates(dailyClimateData, stationData) {
 
     const aggregatedData = [];
     nestedData.forEach(([stationId, months]) => {
-        const stationName = stationMap.get(stationId) || `Station ${stationId}`;
+        const st = stationMap.get(stationId);
+        if (!st) return;
+        const stationName = st.STATION_NAME;
+
         months.forEach(([yearMonth, days]) => {
             const avgTemp = d3.mean(days, d => d.TEMPERATURE_AIR);
             const avgHumidity = d3.mean(days, d => d.HUMIDITY);
@@ -27,7 +52,12 @@ export function createParallelCoordinates(dailyClimateData, stationData) {
                     yearMonth: yearMonth,
                     "Temperature": avgTemp,
                     "Humidity": avgHumidity,
-                    "Air Pressure": avgPressure
+                    "Air Pressure": avgPressure,
+                    // Store categories for linking with Q1 and Q4
+                    loc: getLocationCat(st),
+                    elev: getElevationCat(st),
+                    pressCat: getPressureCat(avgPressure),
+                    season: getSeason(yearMonth.split('-')[1])
                 });
             }
         });
@@ -51,8 +81,9 @@ export function createParallelCoordinates(dailyClimateData, stationData) {
         .append("g")
         .attr("transform", `translate(${margin.left},${margin.top})`);
 
-    // Create a continuous color scale based on Temperature
-    const colorScale = d3.scaleSequential(d3.interpolateTurbo)
+    // Create a beautiful, semantically correct continuous color scale for Temperature
+    // (Cold = Blue, Neutral = Yellow, Hot = Red)
+    const colorScale = d3.scaleSequential(t => d3.interpolateRdYlBu(1 - t))
         .domain(d3.extent(aggregatedData, d => d["Temperature"]));
 
     // Create Tooltip
@@ -119,7 +150,10 @@ export function createParallelCoordinates(dailyClimateData, stationData) {
                 <hr style="margin: 4px 0; border-top: 1px solid #ddd;" />
                 Temperature: ${d["Temperature"].toFixed(1)} °C<br/>
                 Humidity: ${d["Humidity"].toFixed(1)} %<br/>
-                Pressure: ${d["Air Pressure"].toFixed(1)} hPa
+                Pressure: ${d["Air Pressure"].toFixed(1)} hPa<br/>
+                <hr style="margin: 4px 0; border-top: 1px solid #ddd;" />
+                ${d.pressCat} | ${d.loc} | ${d.elev}<br/>
+                Season: ${d.season}
             `)
             .style("left", (event.pageX + 15) + "px")
             .style("top", (event.pageY - 28) + "px");
@@ -134,7 +168,7 @@ export function createParallelCoordinates(dailyClimateData, stationData) {
                 .style("stroke-width", 1.5)
                 // If there are active brushes, we must respect their opacity, otherwise revert to 0.4
                 .style("opacity", function() {
-                    return d3.select(this).classed("brushed-hidden") ? 0.05 : 0.4;
+                    return d3.select(this).classed("brushed-hidden") ? 0.05 : (d3.select(this).classed("linked-highlight") ? 0.8 : 0.4);
                 });
 
             tooltip.transition().duration(500).style("opacity", 0);
@@ -166,6 +200,8 @@ export function createParallelCoordinates(dailyClimateData, stationData) {
     // Add and store a brush for each axis
     const brushes = {};
     const extents = {};
+    let currentQ4Node = null; // Store linked state
+    let currentQ1Season = null; // Store linked state
 
     axes.each(function(d) {
         extents[d] = null; 
@@ -178,6 +214,46 @@ export function createParallelCoordinates(dailyClimateData, stationData) {
             .call(brushes[d]);
     });
 
+    function updateLineVisibility() {
+        lines.each(function(d) {
+            // 1. Check PCP internal brushing
+            const isBrushedSelected = dimensions.every(p => {
+                if (!extents[p]) return true;
+                const val = d[p];
+                return val >= extents[p][0] && val <= extents[p][1];
+            });
+
+            // 2. Check Q4 linking
+            let isLinkedSelected = true;
+            if (currentQ4Node) {
+                isLinkedSelected = (d.pressCat === currentQ4Node || d.loc === currentQ4Node || d.elev === currentQ4Node);
+            }
+
+            // 3. Check Q1 Season linking
+            let isSeasonSelected = true;
+            if (currentQ1Season) {
+                isSeasonSelected = (d.season === currentQ1Season);
+            }
+
+            const isSelected = isBrushedSelected && isLinkedSelected && isSeasonSelected;
+            
+            // Note: If no brushes and no Q4/Q1 link, everything is 'selected' logically but should look normal (0.4)
+            // If linked, we might want to highlight them more explicitly (0.8)
+            const shouldHighlight = isSelected && (currentQ4Node !== null || currentQ1Season !== null || Object.values(extents).some(e => e !== null));
+
+            d3.select(this).classed("brushed-hidden", !isSelected);
+            d3.select(this).classed("linked-highlight", (currentQ4Node !== null && isLinkedSelected) || (currentQ1Season !== null && isSeasonSelected));
+
+            if (!isSelected) {
+                d3.select(this).style("opacity", 0.05).style("stroke-width", 1);
+            } else {
+                d3.select(this)
+                    .style("opacity", shouldHighlight ? 0.8 : 0.4)
+                    .style("stroke-width", shouldHighlight ? 2 : 1.5);
+            }
+        });
+    }
+
     function brushed(event, dimension) {
         if (!event.selection) {
             extents[dimension] = null;
@@ -187,21 +263,19 @@ export function createParallelCoordinates(dailyClimateData, stationData) {
                 yScales[dimension].invert(event.selection[0])
             ];
         }
-
-        // Check which lines are selected
-        lines.each(function(d) {
-            const isSelected = dimensions.every(p => {
-                if (!extents[p]) return true;
-                const val = d[p];
-                return val >= extents[p][0] && val <= extents[p][1];
-            });
-
-            // We use a CSS class approach so mouseout knows whether to stay hidden or visible
-            d3.select(this).classed("brushed-hidden", !isSelected);
-
-            d3.select(this)
-                .style("opacity", isSelected ? 0.8 : 0.05)
-                .style("stroke-width", isSelected ? 2 : 1);
-        });
+        updateLineVisibility();
     }
+
+    // -------------------------------------------------------------------------
+    // 6. LISTEN FOR Q1/Q4 BRUSHING AND LINKING
+    // -------------------------------------------------------------------------
+    d3.select(window).on("q4-node-selected", function(event) {
+        currentQ4Node = event.detail.selectedNode;
+        updateLineVisibility();
+    });
+
+    d3.select(window).on("q1-season-selected", function(event) {
+        currentQ1Season = event.detail.selectedSeason;
+        updateLineVisibility();
+    });
 }

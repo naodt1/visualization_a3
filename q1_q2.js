@@ -469,6 +469,9 @@ export function createTimeSeries(dailyClimateData, stationData) {
                 }
             });
         }
+        
+        // Dispatch event for linking with Q3
+        window.dispatchEvent(new CustomEvent('q1-season-selected', { detail: { selectedSeason: selectedSeasonName } }));
     }
 
     // Dismiss tooltip and clear all selections if clicking the empty canvas space
@@ -508,6 +511,7 @@ export function createTimeSeries(dailyClimateData, stationData) {
                     .style("border-color", seasonColors(s.season));
             });
             selectedSeasonName = null; // Clear tracking variable
+            window.dispatchEvent(new CustomEvent('q1-season-selected', { detail: { selectedSeason: null } }));
         }
     });
 }

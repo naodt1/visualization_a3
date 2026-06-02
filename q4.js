@@ -206,8 +206,14 @@ export function createParallelSets(dailyClimateData, stationData) {
                 linkPaths.transition().duration(200).attr("fill-opacity", 0.5);
                 node.transition().duration(200).attr("opacity", 1);
                 infoText.text("Click a node to see details");
+                
+                // Dispatch event for linking with Q3
+                window.dispatchEvent(new CustomEvent('q4-node-selected', { detail: { selectedNode: null } }));
             } else {
                 selectedNode = d.name; // Select
+
+                // Dispatch event for linking with Q3
+                window.dispatchEvent(new CustomEvent('q4-node-selected', { detail: { selectedNode: selectedNode } }));
                 
                 // Calculate percentage
                 const percentage = ((d.value / totalRecords) * 100).toFixed(1);
