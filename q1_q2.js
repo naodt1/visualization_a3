@@ -167,7 +167,8 @@ export function createTimeSeries(dailyClimateData, stationData) {
         .attr("stroke", "none")
         .style("cursor", "pointer")
         .style("pointer-events", "all")
-        .on("click", function (event, d) {
+        .on("mouseenter", function (event, d) {
+            // Remove any existing ring first to prevent duplicates
             d3.selectAll(".temp-target-highlight").remove();
 
             tempGroup.append("circle")
@@ -185,8 +186,13 @@ export function createTimeSeries(dailyClimateData, stationData) {
                 .html(`<strong>${d.stationName}</strong><br/>
                            Date: ${tempFormatter(d.date)}<br/>
                            Min Temp: ${d.minTemp.toFixed(1)} °C`)
-                .style("left", (event.pageX + 10) + "px")
+                .style("left", (event.pageX + 12) + "px") // Added a tiny bit more padding
                 .style("top", (event.pageY - 15) + "px");
+        })
+        // --- HOVER OUT: HIDE TOOLTIP AND RING ---
+        .on("mouseleave", function () {
+            d3.selectAll(".temp-target-highlight").remove();
+            d3.select("#chart-tooltip").style("opacity", 0);
         });
 
     // -------------------------------------------------------------------------
@@ -248,26 +254,31 @@ export function createTimeSeries(dailyClimateData, stationData) {
             .attr("fill", "transparent")
             .style("cursor", "pointer")
             .style("pointer-events", "all")
-            .on("click", function (event, d) {
+            .on("mouseenter", function(event, d) {
                 d3.selectAll(".humid-target-highlight").remove();
-
+        
                 humidGroup.append("circle")
                     .attr("class", "humid-target-highlight")
                     .attr("cx", xScale(d.date))
                     .attr("cy", yHumidScale(d.avgHumidity))
-                    .attr("r", 7)
+                    .attr("r", 6)
                     .attr("fill", "none")
                     .attr("stroke", "#333")
                     .attr("stroke-width", 2)
                     .attr("clip-path", "url(#chart-clip)");
-
+        
                 d3.select("#chart-tooltip")
                     .style("opacity", 1)
                     .html(`<strong>Season: ${d.season}</strong><br/>
-                       Year: ${d.year}<br/>
-                       Mean Humidity: ${d.avgHumidity.toFixed(1)}%`)
-                    .style("left", (event.pageX + 10) + "px")
+                               Year: ${d.date.getFullYear()}<br/>
+                               Mean Humidity: ${d.avgHumidity.toFixed(1)}%`)
+                    .style("left", (event.pageX + 12) + "px")
                     .style("top", (event.pageY - 15) + "px");
+            })
+            // --- HOVER OUT: HIDE TOOLTIP AND RING ---
+            .on("mouseleave", function() {
+                d3.selectAll(".humid-target-highlight").remove();
+                d3.select("#chart-tooltip").style("opacity", 0);
             });
     });
 
