@@ -2,32 +2,27 @@ import * as d3 from 'd3';
 
 export function createTimeSeries(dailyClimateData, stationData) {
     // -------------------------------------------------------------------------
-    // 1. DATA PRE-PROCESSING (Aggregating Stations into 4 Seasons per Year)
+    // 1. DATA PRE-PROCESSING
     // -------------------------------------------------------------------------
 
-    // Helper function to map a standard JavaScript month (0-11) to a Season name
     function getSeason(month) {
-        if (month === 11 || month === 0 || month === 1) return "Winter"; // Dec, Jan, Feb
-        if (month >= 2 && month <= 4) return "Spring"; // Mar, Apr, May
-        if (month >= 5 && month <= 7) return "Summer"; // Jun, Jul, Aug
-        return "Autumn";                                                  // Sep, Oct, Nov
+        if (month === 11 || month === 0 || month === 1) return "Winter"; 
+        if (month >= 2 && month <= 4) return "Spring"; 
+        if (month >= 5 && month <= 7) return "Summer"; 
+        return "Autumn";                                                  
     }
 
-    // Step A: Format daily records into distinct Year-Season buckets
     const entriesBySeason = [];
-
     dailyClimateData.forEach(d => {
         const year = d.DATE.getFullYear();
         const month = d.DATE.getMonth();
         let seasonYear = year;
 
-        // Meteorological adjustment: December belongs to the *following* year's winter
         if (month === 11) {
             seasonYear = year + 1;
         }
 
         const seasonName = getSeason(month);
-
         entriesBySeason.push({
             key: `${seasonYear}-${seasonName}`,
             year: seasonYear,
@@ -37,47 +32,31 @@ export function createTimeSeries(dailyClimateData, stationData) {
         });
     });
 
-    // Step B: Group by Season Name, then by Year
     const rolledSeasonData = d3.groups(entriesBySeason, d => d.season);
-
     const formattedSeasonData = rolledSeasonData.map(([seasonName, records]) => {
-        // Group the records of this specific season by individual years
         const yearsArray = d3.groups(records, r => r.year)
             .map(([year, dayEntries]) => {
                 return {
-                    // Create a valid date representation centered in that season for the x-axis
                     date: new Date(year, seasonName === "Winter" ? 0 : seasonName === "Spring" ? 3 : seasonName === "Summer" ? 6 : 9, 1),
                     year: year,
-                    // Calculate regional averages/minimums across all stations combined
                     avgHumidity: d3.mean(dayEntries, e => e.humidity),
                     minTemp: d3.min(dayEntries, e => e.tempMin)
                 };
             })
-            .sort((a, b) => a.date - b.date); // Keep chronological order
+            .sort((a, b) => a.date - b.date);
 
-        return {
-            season: seasonName,
-            history: yearsArray
-        };
+        return { season: seasonName, history: yearsArray };
     });
 
-    // Extract Station Map for the Top Chart (Q1 still needs individual station tracking)
     const stationMap = new Map(stationData.map(s => [s.STATION_ID, s.STATION_NAME]));
     const nestedStationData = d3.groups(dailyClimateData, d => d.STATION_ID).map(([stationId, days]) => {
-
-        // 1. Group strictly by the 4-digit Year (e.g., 2011, 2012)
         const yearlyGroups = d3.groups(days, d => d.DATE.getFullYear());
-
-        // 2. Map over each year to extract the absolute lowest temperature night
         const history = yearlyGroups.map(([year, records]) => {
             return {
-                // Set the date coordinate to Jan 1st of that year for clean scale placement
                 date: new Date(year, 0, 1),
-
-                // This keeps your data integrity safe by picking the single coldest day of that entire year!
                 minTemp: d3.min(records, r => r.TEMPERATURE_AIR_MIN)
             };
-        }).sort((a, b) => a.date - b.date); // Keep them in chronological order
+        }).sort((a, b) => a.date - b.date);
 
         return { stationId, stationName: stationMap.get(stationId), history };
     });
@@ -94,15 +73,16 @@ export function createTimeSeries(dailyClimateData, stationData) {
         .attr("width", width + margin.left + margin.right)
         .attr("height", (height * 2) + margin.top + margin.bottom + 100);
 
-    // Color Scales
     const stationColors = d3.scaleOrdinal(d3.schemeTableau10);
-
-    // Explicit semantic colors for the four seasons
     const seasonColors = d3.scaleOrdinal()
         .domain(["Winter", "Spring", "Summer", "Autumn"])
         .range(["#4a90e2", "#7ed321", "#d0021b", "#f5a623"]);
 
     const tempFormatter = d3.timeFormat("%B %Y");
+
+    // State Tracking Variables
+    let selectedStationId = null; 
+    let selectedSeasonName = null;
 
     // -------------------------------------------------------------------------
     // 3. AXES & SCALES Setup
@@ -111,15 +91,13 @@ export function createTimeSeries(dailyClimateData, stationData) {
         .domain(d3.extent(dailyClimateData, d => d.DATE))
         .range([0, width]);
 
-    // Calculate the absolute lowest and highest values present in our yearly roll-up
     const absoluteMinTemp = d3.min(nestedStationData, s => d3.min(s.history, h => h.minTemp));
     const absoluteMaxTemp = d3.max(nestedStationData, s => d3.max(s.history, h => h.minTemp));
 
     const yTempScale = d3.scaleLinear()
-        .domain([absoluteMinTemp - 2, absoluteMaxTemp + 2]) // Adds a clean 2°C breathing room pad at the top and bottom
+        .domain([absoluteMinTemp - 2, absoluteMaxTemp + 2])
         .range([height, 0]);
 
-    // Optimize the Y-axis range specifically for seasonal humidity means
     const minHum = d3.min(formattedSeasonData, s => d3.min(s.history, h => h.avgHumidity));
     const maxHum = d3.max(formattedSeasonData, s => d3.max(s.history, h => h.avgHumidity));
 
@@ -127,7 +105,6 @@ export function createTimeSeries(dailyClimateData, stationData) {
         .domain([minHum - 3, Math.min(100, maxHum + 3)])
         .range([height, 0]);
 
-    // Define clip path window
     svg.append("defs").append("clipPath")
         .attr("id", "chart-clip")
         .append("rect").attr("width", width).attr("height", height);
@@ -137,86 +114,43 @@ export function createTimeSeries(dailyClimateData, stationData) {
     // -------------------------------------------------------------------------
     const tempGroup = svg.append("g").attr("transform", `translate(${margin.left},${margin.top})`);
 
-    // Axes setup
     tempGroup.append("g").attr("class", "x-axis").attr("transform", `translate(0,${height})`).call(d3.axisBottom(xScale).tickFormat(""));
     tempGroup.append("g").call(d3.axisLeft(yTempScale));
 
-    // Axis label
     tempGroup.append("text")
         .attr("transform", "rotate(-90)").attr("y", -margin.left + 20).attr("x", -height / 2)
         .attr("text-anchor", "middle").style("font-size", "12px").text("Min Temp Air (°C)");
 
-    // Line generator
     const tempLine = d3.line().x(d => xScale(d.date)).y(d => yTempScale(d.minTemp)).defined(d => !isNaN(d.minTemp));
 
-    // 1. DRAW LINES FIRST (Bottom Layer)
-    tempGroup.append("g").attr("clip-path", "url(#chart-clip)")
-        .selectAll(".temp-line").data(nestedStationData).enter().append("path")
-        .attr("class", d => `line-${d.stationId} temp-line`)
-        .attr("d", d => tempLine(d.history)).attr("fill", "none")
-        .attr("stroke", d => stationColors(d.stationName)).attr("stroke-width", 2.5);
-
-    // 2. DRAW BRUSH SECOND (Middle Layer)
-
-    // 3. DRAW INVISIBLE CLICK TARGETS THIRD (Top Layer)
+    // Draw lines once with click pointer handlers attached
     tempGroup.append("g").attr("clip-path", "url(#chart-clip)")
         .selectAll(".temp-line").data(nestedStationData).enter().append("path")
         .attr("class", d => `line-${d.stationId} temp-line`)
         .attr("d", d => tempLine(d.history)).attr("fill", "none")
         .attr("stroke", d => stationColors(d.stationName)).attr("stroke-width", 2.5)
         .style("cursor", "pointer")
-        .style("pointer-events", "stroke") // Works perfectly on lines! Makes the clickable footprint thicker.
+        .style("pointer-events", "stroke")
         .on("click", function (event, d) {
-            event.stopPropagation(); // Prevents background click reset
-
-            if (selectedStationId === d.stationId) {
-                // RESET STATE
-                svg.selectAll("path.temp-line").transition().duration(200).style("opacity", 1).style("stroke-width", 1.2);
-                d3.selectAll(".station-item").style("background-color", "transparent").style("border-color", "#ccc");
-                selectedStationId = null;
-            } else {
-                // ISOLATE STATE
-                selectedStationId = d.stationId;
-
-                // Fade out all temperature lines except this one
-                svg.selectAll("path.temp-line").transition().duration(200)
-                    .style("opacity", l => l.stationId === d.stationId ? 1 : 0.15)
-                    .style("stroke-width", l => l.stationId === d.stationId ? 4.5 : 2.0);
-
-                // Sync HTML Legend items
-                d3.selectAll(".station-item")
-                    .style("background-color", "transparent")
-                    .style("color", "#333") // Dark gray text
-                    .style("border-color", "#ccc");
-
-                // Pop the active one with its specific station color!
-                d3.select(`#legend-station-${d.stationId}`)
-                    .style("background-color", stationColors(d.stationName))
-                    .style("color", "#fff") // Turn text crisp white so it's readable
-                    .style("border-color", stationColors(d.stationName));
-            }
+            event.stopPropagation();
+            selectedStationId = (selectedStationId === d.stationId) ? null : d.stationId;
+            updateStationVisuals();
         });
 
-    // 2. INVISIBLE HOVER TARGETS (Tooltips Only)
-    tempGroup.append("g")
-        .attr("clip-path", "url(#chart-clip)")
+    // Hover Targets (Tooltips Only)
+    tempGroup.append("g").attr("clip-path", "url(#chart-clip)")
         .selectAll(".temp-target-group")
-        .data(nestedStationData)
-        .enter()
-        .append("g")
+        .data(nestedStationData).enter().append("g")
         .attr("class", d => `targets-${d.stationId}`)
         .selectAll("circle")
-        // Pass the parent's stationId down into the historical entries explicitly!
         .data(d => d.history.map(h => ({ ...h, stationName: d.stationName, stationId: d.stationId })))
-        .enter()
-        .append("circle")
+        .enter().append("circle")
         .attr("cx", d => xScale(d.date))
         .attr("cy", d => yTempScale(d.minTemp))
-        .attr("r", 6) // Generous sizing makes hovering easy
+        .attr("r", 6)
         .attr("fill", "transparent")
-        .attr("stroke", "none")
         .style("cursor", "pointer")
-        .style("pointer-events", "all") // Keep this "all" so the whole transparent area catches hovers
+        .style("pointer-events", "all")
         .on("mouseenter", function (event, d) {
             d3.selectAll(".temp-target-highlight").remove();
 
@@ -232,9 +166,7 @@ export function createTimeSeries(dailyClimateData, stationData) {
 
             d3.select("#chart-tooltip")
                 .style("opacity", 1)
-                .html(`<strong>${d.stationName}</strong><br/>
-                       Date: ${tempFormatter(d.date)}<br/>
-                       Min Temp: ${d.minTemp.toFixed(1)} °C`)
+                .html(`<strong>${d.stationName}</strong><br/>Date: ${tempFormatter(d.date)}<br/>Min Temp: ${d.minTemp.toFixed(1)} °C`)
                 .style("left", (event.pageX + 12) + "px")
                 .style("top", (event.pageY - 15) + "px");
         })
@@ -244,7 +176,7 @@ export function createTimeSeries(dailyClimateData, stationData) {
         });
 
     // -------------------------------------------------------------------------
-    // 5. PLOT 2: SEASONAL HUMIDITY TRENDS (BOTTOM) - New Design
+    // 5. PLOT 2: SEASONAL HUMIDITY TRENDS (BOTTOM)
     // -------------------------------------------------------------------------
     const humidGroup = svg.append("g").attr("transform", `translate(${margin.left},${margin.top + height + 40})`);
     humidGroup.append("g").attr("class", "x-axis").attr("transform", `translate(0,${height})`).call(d3.axisBottom(xScale));
@@ -254,78 +186,37 @@ export function createTimeSeries(dailyClimateData, stationData) {
         .attr("transform", "rotate(-90)").attr("y", -margin.left + 20).attr("x", -height / 2)
         .attr("text-anchor", "middle").style("font-size", "12px").text("Mean Humidity (%)");
 
-    const humidLine = d3.line()
-        .x(d => xScale(d.date))
-        .y(d => yHumidScale(d.avgHumidity))
-        .curve(d3.curveMonotoneX) // Smooth curves to make trends easier to follow
-        .defined(d => !isNaN(d.avgHumidity));
+    const humidLine = d3.line().x(d => xScale(d.date)).y(d => yHumidScale(d.avgHumidity)).curve(d3.curveMonotoneX).defined(d => !isNaN(d.avgHumidity));
 
-    // 1. DRAW THE 4 SEASONAL TIMELINES (Handles Clicking to Filter)
+    // Draw lines
     humidGroup.append("g").attr("clip-path", "url(#chart-clip)")
-        .selectAll(".humid-line")
-        .data(formattedSeasonData)
-        .enter()
-        .append("path")
+        .selectAll(".humid-line").data(formattedSeasonData).enter().append("path")
         .attr("class", d => `season-${d.season} humid-line`)
-        .attr("d", d => humidLine(d.history))
-        .attr("fill", "none")
-        .attr("stroke", d => seasonColors(d.season))
-        .attr("stroke-width", 3)
+        .attr("d", d => humidLine(d.history)).attr("fill", "none")
+        .attr("stroke", d => seasonColors(d.season)).attr("stroke-width", 3)
         .style("cursor", "pointer")
-        .style("pointer-events", "stroke") // Makes clicking anywhere along the line shape effortless
-        .on("click", function (event, d) {
-            event.stopPropagation(); // Prevents background canvas click reset from firing
-
-            if (selectedSeasonName === d.season) {
-                // RESET STATE: Bring everything back to normal
-                svg.selectAll("path.humid-line").transition().duration(200).style("opacity", 1).style("stroke-width", 3);
-                svg.selectAll(".dot-marker").transition().duration(200).style("opacity", 1);
-                d3.selectAll(".season-btn").style("background-color", "transparent").style("border-color", "#ccc");
-                selectedSeasonName = null;
-            } else {
-                // ISOLATE STATE: Dim everything else
-                selectedSeasonName = d.season;
-
-                // Fade out other lines
-                svg.selectAll("path.humid-line").transition().duration(200)
-                    .style("opacity", s => s.season === d.season ? 1 : 0.1)
-                    .style("stroke-width", s => s.season === d.season ? 4.5 : 3);
-
-                // Fade out other dots
-                svg.selectAll(".dot-marker").transition().duration(200)
-                    .style("opacity", m => m.season === d.season ? 1 : 0.1);
-
-                // Synchronize your HTML season legend UI buttons at the bottom
-                d3.selectAll(".season-btn")
-                    .style("background-color", "transparent")
-                    .style("color", "#333")
-                    .style("border-color", "#ccc");
-
-                d3.select(`.season-btn-${d.season}`)
-                    .style("background-color", seasonColors(d.season))
-                    .style("color", "#fff")
-                    .style("border-color", seasonColors(d.season));
-            }
+        .style("pointer-events", "stroke")
+        .on("click", function(event, d) {
+            event.stopPropagation();
+            selectedSeasonName = (selectedSeasonName === d.season) ? null : d.season;
+            updateSeasonVisuals();
         });
 
-    // 2. DRAW VISUAL DOTS ON TOP (Handles Hovering for Tooltips)
+    // Draw points (Tooltips Only)
     humidGroup.append("g").attr("clip-path", "url(#chart-clip)")
         .selectAll(".dot-marker")
         .data(formattedSeasonData.flatMap(s => s.history.map(h => ({ ...h, season: s.season }))))
-        .enter()
-        .append("circle")
+        .enter().append("circle")
         .attr("class", d => `dot-marker dot-${d.season}`)
         .attr("cx", d => xScale(d.date))
         .attr("cy", d => yHumidScale(d.avgHumidity))
-        .attr("r", 4) // Bumped up slightly to double as a reliable hover target
+        .attr("r", 4)
         .attr("fill", d => seasonColors(d.season))
         .style("cursor", "pointer")
-        .style("pointer-events", "all") // Ensures the whole face of the dot intercepts hovers
+        .style("pointer-events", "all")
         .on("mouseenter", function (event, d) {
-            // Remove any existing ring first to prevent visual stacking bugs
             d3.selectAll(".humid-target-highlight").remove();
 
-            // Append a clean focus ring around the target
             humidGroup.append("circle")
                 .attr("class", "humid-target-highlight")
                 .attr("cx", xScale(d.date))
@@ -336,17 +227,13 @@ export function createTimeSeries(dailyClimateData, stationData) {
                 .attr("stroke-width", 2)
                 .attr("clip-path", "url(#chart-clip)");
 
-            // Populate and reveal tooltip
             d3.select("#chart-tooltip")
                 .style("opacity", 1)
-                .html(`<strong>Season: ${d.season}</strong><br/>
-               Year: ${d.date.getFullYear()}<br/>
-               Mean Humidity: ${d.avgHumidity.toFixed(1)}%`)
+                .html(`<strong>Season: ${d.season}</strong><br/>Year: ${d.date.getFullYear()}<br/>Mean Humidity: ${d.avgHumidity.toFixed(1)}%`)
                 .style("left", (event.pageX + 12) + "px")
                 .style("top", (event.pageY - 15) + "px");
         })
         .on("mouseleave", function () {
-            // Instantly clean up highlights and hide tooltip when the mouse slides away
             d3.selectAll(".humid-target-highlight").remove();
             d3.select("#chart-tooltip").style("opacity", 0);
         });
@@ -354,223 +241,126 @@ export function createTimeSeries(dailyClimateData, stationData) {
     // -------------------------------------------------------------------------
     // 6. VISUAL INTERACTION ELEMENT (The New Custom Legend)
     // -------------------------------------------------------------------------
-    const masterLegendContainer = d3.select("#timeline-legend").html(""); // Clear layout container
+    const masterLegendContainer = d3.select("#timeline-legend").html(""); 
 
-    // --- PART A: STATION SELECTION CONTROLS (TOP PLOT) ---
+    // --- PART A: STATION SELECTION CONTROLS ---
     masterLegendContainer.append("div")
-        .style("font-weight", "bold")
-        .style("font-size", "13px")
-        .style("margin-bottom", "4px")
+        .style("font-weight", "bold").style("font-size", "13px").style("margin-bottom", "4px")
         .text("Filter by Station (Temperature Plot):");
 
     const stationLegendRow = masterLegendContainer.append("div")
         .style("display", "flex").style("gap", "8px").style("flex-wrap", "wrap").style("margin-bottom", "15px");
 
-    let selectedStationId = null; // Selection tracking variable
-
-    nestedStationData.forEach(d => {
+    nestedStationData.forEach(station => {
         const item = stationLegendRow.append("div")
-            .attr("class", `station-item station-${d.stationId}`)
+            .attr("class", `station-item station-${station.stationId}`)
             .style("display", "flex").style("align-items", "center").style("gap", "5px")
             .style("cursor", "pointer").style("padding", "3px 8px")
             .style("border", "1px solid #ccc").style("border-radius", "3px").style("font-size", "12px")
             .style("transition", "all 0.2s");
 
-        item.append("span")
-            .style("display", "inline-block").style("width", "10px").style("height", "10px")
-            .style("background-color", stationColors(d.stationName));
+        item.append("span").style("display", "inline-block").style("width", "10px").style("height", "10px").style("background-color", stationColors(station.stationName));
+        item.append("span").text(station.stationName);
 
-        item.append("span").text(d.stationName);
-
-        // Persistent Click Selection Interaction
-        item.on("click", function () {
-            if (selectedStationId === d.stationId) {
-                selectedStationId = null; // Toggle off
-            } else {
-                selectedStationId = d.stationId; // Toggle on
-            }
+        item.on("click", function (event) {
+            event.stopPropagation();
+            selectedStationId = (selectedStationId === station.stationId) ? null : station.stationId;
             updateStationVisuals();
         });
     });
 
-    function updateStationVisuals() {
-        if (selectedStationId === null) {
-            // --- DEFAULT STATE: No active selection ---
-            // 1. Reset line styles
-            svg.selectAll("path.temp-line").style("opacity", 1).style("stroke-width", 1.2);
-
-            // 2. Reactivate pointer events for EVERY station's dots
-            nestedStationData.forEach(d => {
-                tempGroup.selectAll(`.targets-${d.stationId} circle`)
-                    .style("pointer-events", "all")
-                    .style("cursor", "pointer");
-            });
-
-            // 3. Reset Legend buttons
-            d3.selectAll(".station-item").style("background-color", "transparent").style("border-color", "#ccc");
-        } else {
-            // --- FILTERED STATE: One station is locked ---
-            // 1. Dim all lines except the active selection
-            svg.selectAll("path.temp-line").style("opacity", 0.1).style("stroke-width", 1);
-            svg.selectAll(`.line-${selectedStationId}`).style("opacity", 1).style("stroke-width", 2.5);
-
-            // 2. DISABLE pointer events for hidden stations, ENABLE only for the selected one
-            nestedStationData.forEach(d => {
-                if (d.stationId === selectedStationId) {
-                    tempGroup.selectAll(`.targets-${d.stationId} circle`)
-                        .style("pointer-events", "all")
-                        .style("cursor", "pointer");
-                } else {
-                    tempGroup.selectAll(`.targets-${d.stationId} circle`)
-                        .style("pointer-events", "none") // <-- This forces the mouse to ignore these dots!
-                        .style("cursor", "default");
-                }
-            });
-
-            // 3. Update Legend Box UI highlights
-            d3.selectAll(".station-item").style("background-color", "transparent").style("border-color", "#ccc");
-            d3.select(`.station-${selectedStationId}`).style("background-color", "#f0f0f0").style("border-color", "#333");
-        }
-    }
-
-    // --- PART B: SEASON CONTROLS (BOTTOM PLOT) ---
+    // --- PART B: SEASON SELECTION CONTROLS ---
     masterLegendContainer.append("div")
-        .style("font-weight", "600")
-        .style("font-size", "13px")
-        .style("color", "#444")
-        .style("margin-bottom", "6px")
+        .style("font-weight", "600").style("font-size", "13px").style("color", "#444").style("margin-bottom", "6px")
         .text("Filter by Season (Humidity Plot):");
 
-    const seasonLegendRow = masterLegendContainer.append("div")
-        .style("display", "flex")
-        .style("gap", "10px")
-        .style("flex-wrap", "wrap");
+    const seasonLegendRow = masterLegendContainer.append("div").style("display", "flex").style("gap", "10px").style("flex-wrap", "wrap");
 
-    // Track the currently active seasonal selection state
-    let selectedSeasonName = null;
-
-    formattedSeasonData.forEach(d => {
+    formattedSeasonData.forEach(sNode => {
         const item = seasonLegendRow.append("div")
-            .attr("class", `season-item season-btn-${d.season}`)
-            .style("display", "flex")
-            .style("align-items", "center")
-            .style("gap", "5px")
-            .style("cursor", "pointer")
-            .style("padding", "3px 8px")
-            .style("border", `1px solid ${seasonColors(d.season)}`)
-            .style("border-radius", "3px")
-            .style("font-size", "12px")
+            .attr("class", `season-item season-btn-${sNode.season}`)
+            .style("display", "flex").style("align-items", "center").style("gap", "5px")
+            .style("cursor", "pointer").style("padding", "3px 8px")
+            .style("border", `1px solid ${seasonColors(sNode.season)}`).style("border-radius", "3px").style("font-size", "12px")
             .style("transition", "all 0.2s");
 
-        item.append("span")
-            .style("display", "inline-block")
-            .style("width", "10px")
-            .style("height", "10px")
-            .style("background-color", seasonColors(d.season));
+        item.append("span").style("display", "inline-block").style("width", "10px").style("height", "10px").style("background-color", seasonColors(sNode.season));
+        item.append("span").text(sNode.season);
 
-        item.append("span").text(d.season);
-
-        // Persistent Click Selection Interaction for Seasons
-        item.on("click", function () {
-            if (selectedSeasonName === d.season) {
-                selectedSeasonName = null; // Toggle off if clicking the active season
-            } else {
-                selectedSeasonName = d.season; // Toggle on new season
-            }
+        item.on("click", function (event) {
+            event.stopPropagation();
+            selectedSeasonName = (selectedSeasonName === sNode.season) ? null : sNode.season;
             updateSeasonVisuals();
         });
     });
 
-    function updateSeasonVisuals() {
-        if (selectedSeasonName === null) {
-            // --- DEFAULT STATE: Reset everything ---
-            svg.selectAll("path.humid-line").style("opacity", 1).style("stroke-width", 3);
-            svg.selectAll(".dot-marker").style("opacity", 1);
+    // -------------------------------------------------------------------------
+    // 7. CENTRALIZED STATE VISUAL UPDATERS
+    // -------------------------------------------------------------------------
+    function updateStationVisuals() {
+        // Reset all buttons first
+        d3.selectAll(".station-item").style("background-color", "transparent").style("color", "#333").style("border-color", "#ccc");
 
-            // Reactivate click capability for ALL seasonal target dots
-            svg.selectAll(".humid-target-clicker")
-                .style("pointer-events", "all")
-                .style("cursor", "pointer");
-
-            formattedSeasonData.forEach(s => {
-                d3.select(`.season-btn-${s.season}`)
-                    .style("background-color", "transparent")
-                    .style("border-color", seasonColors(s.season));
+        if (selectedStationId === null) {
+            svg.selectAll("path.temp-line").style("opacity", 1).style("stroke-width", 2.5);
+            nestedStationData.forEach(d => {
+                tempGroup.selectAll(`.targets-${d.stationId} circle`).style("pointer-events", "all").style("cursor", "pointer");
             });
         } else {
-            // --- FILTERED STATE: One season locked ---
-            // 1. Dim all seasonal lines and points
-            svg.selectAll("path.humid-line").style("opacity", 0.15).style("stroke-width", 2);
-            svg.selectAll(".dot-marker").style("opacity", 0.15);
+            svg.selectAll("path.temp-line").style("opacity", 0.15).style("stroke-width", 2.0);
+            svg.selectAll(`.line-${selectedStationId}`).style("opacity", 1).style("stroke-width", 4.5);
 
-            // 2. Pop out the selected seasonal line and its explicit dot markers
-            svg.selectAll(`path.season-${selectedSeasonName}`).style("opacity", 1).style("stroke-width", 4.5);
-            svg.selectAll(`.dot-${selectedSeasonName}`).style("opacity", 1);
-
-            // 3. DISABLE pointer events for hidden seasons, ENABLE only for the active one
-            svg.selectAll(".humid-target-clicker")
-                .style("pointer-events", "none")
-                .style("cursor", "default");
-
-            svg.selectAll(`.humid-target-${selectedSeasonName}`)
-                .style("pointer-events", "all")
-                .style("cursor", "pointer");
-
-            // 4. Update Legend Button UI frames
-            formattedSeasonData.forEach(s => {
-                const btn = d3.select(`.season-btn-${s.season}`);
-                if (s.season === selectedSeasonName) {
-                    btn.style("background-color", "#f0f0f0")
-                        .style("border-color", "#333");
-                } else {
-                    btn.style("background-color", "transparent")
-                        .style("border-color", seasonColors(s.season));
-                }
+            nestedStationData.forEach(d => {
+                const isSelected = (d.stationId === selectedStationId);
+                tempGroup.selectAll(`.targets-${d.stationId} circle`)
+                    .style("pointer-events", isSelected ? "all" : "none")
+                    .style("cursor", isSelected ? "pointer" : "default");
             });
-        }
 
-        // Dispatch event for linking with Q3
+            const activeStation = nestedStationData.find(s => s.stationId === selectedStationId);
+            d3.select(`.station-${selectedStationId}`)
+                .style("background-color", stationColors(activeStation.stationName))
+                .style("color", "#fff")
+                .style("border-color", stationColors(activeStation.stationName));
+        }
+    }
+
+    function updateSeasonVisuals() {
+        // Reset all buttons first
+        formattedSeasonData.forEach(s => {
+            d3.select(`.season-btn-${s.season}`)
+                .style("background-color", "transparent")
+                .style("color", "#333")
+                .style("border-color", seasonColors(s.season));
+        });
+
+        if (selectedSeasonName === null) {
+            svg.selectAll("path.humid-line").style("opacity", 1).style("stroke-width", 3);
+            svg.selectAll(".dot-marker").style("opacity", 1).style("pointer-events", "all");
+        } else {
+            svg.selectAll("path.humid-line").style("opacity", 0.15).style("stroke-width", 2);
+            svg.selectAll(".dot-marker").style("opacity", 0.15).style("pointer-events", "none");
+
+            svg.selectAll(`path.season-${selectedSeasonName}`).style("opacity", 1).style("stroke-width", 4.5);
+            svg.selectAll(`.dot-${selectedSeasonName}`).style("opacity", 1).style("pointer-events", "all");
+
+            d3.select(`.season-btn-${selectedSeasonName}`)
+                .style("background-color", seasonColors(selectedSeasonName))
+                .style("color", "#fff")
+                .style("border-color", seasonColors(selectedSeasonName));
+        }
         window.dispatchEvent(new CustomEvent('q1-season-selected', { detail: { selectedSeason: selectedSeasonName } }));
     }
 
-    // Dismiss tooltip and clear all selections if clicking the empty canvas space
+    // Canvas Background Reset Click Handler
     svg.on("click", function (event) {
-        // Check if the user clicked the actual background canvas or axis space
         if (event.target.tagName === "svg" || event.target.tagName === "rect") {
-
-            // 1. Hide the floating tooltip card
             d3.select("#chart-tooltip").style("opacity", 0);
-
-            // 2. Remove any active target highlight rings
             d3.selectAll(".temp-target-highlight, .humid-target-highlight").remove();
-
-            // 3. RESET TEMPERATURE PLOT VISUALS
-            // Bring back full opacity to all lines
-            svg.selectAll("path.temp-line").style("opacity", 1).style("stroke-width", 2.5);
-            // Reactivate pointer events for all hidden dots
-            nestedStationData.forEach(d => {
-                tempGroup.selectAll(`.targets-${d.stationId} circle`)
-                    .style("pointer-events", "all")
-                    .style("cursor", "pointer");
-            });
-            // Clear station legend active styles
-            d3.selectAll(".station-item").style("background-color", "transparent").style("border-color", "#ccc");
-            selectedStationId = null; // Clear tracking variable
-
-            // 4. RESET HUMIDITY PLOT VISUALS
-            // Bring back full opacity to lines and trend dots
-            svg.selectAll("path.humid-line").style("opacity", 1).style("stroke-width", 3);
-            svg.selectAll(".dot-marker").style("opacity", 1);
-            // Reactivate pointer events for humidity targets
-            svg.selectAll(".humid-target-clicker").style("pointer-events", "all").style("cursor", "pointer");
-            // Clear season legend active styles
-            formattedSeasonData.forEach(s => {
-                d3.select(`.season-btn-${s.season}`)
-                    .style("background-color", "transparent")
-                    .style("border-color", seasonColors(s.season));
-            });
-            selectedSeasonName = null; // Clear tracking variable
-            window.dispatchEvent(new CustomEvent('q1-season-selected', { detail: { selectedSeason: null } }));
+            selectedStationId = null;
+            selectedSeasonName = null;
+            updateStationVisuals();
+            updateSeasonVisuals();
         }
     });
 }
