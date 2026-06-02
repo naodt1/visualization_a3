@@ -14,26 +14,10 @@
         <h2>Assignment 3</h2>
         <div id="visualization" style="display: flex; flex-direction: column; gap: 20px; font-family: sans-serif;">
             <!--   YOUR SVGs HERE   -->
-            <div id="chart-tooltip" style="
-                position: absolute; 
-                opacity: 0; 
-                background-color: rgba(255, 255, 255, 0.95); 
-                border: 1px solid #333; 
-                padding: 8px; 
-                border-radius: 4px; 
-                font-size: 12px; 
-                pointer-events: none; 
-                box-shadow: 2px 2px 6px rgba(0,0,0,0.2);
-                line-height: 1.4;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <h3>Q1 & Q2: Climate Trends (2011 - 2020)</h3>
+                <div id="timeline-legend" style="display: flex; gap: 10px; flex-wrap: wrap; max-width: 600px;"></div>
             </div>
-            <div>
-                <h3 style="margin-bottom: 5px;">Q1 & Q2: Climate Trends (2011 - 2020)</h3>
-            </div>
-            
-            <div id="timeline-container"></div>
-        
-            <div id="timeline-legend" style="display: flex; flex-direction: column; gap: 15px; background: #fafafa; padding: 15px; border-radius: 6px; border: 1px solid #eaeaea; margin-left: 60px; max-width: 800px;">
-                </div>
 
             <div id="timeline-container"></div>
 
@@ -51,104 +35,159 @@
                         on WMO standard sea-level pressure (1013.25 hPa) and typical cyclonic systems.</em>
                 </div>
             </div>
-        </div>
 
-        <section>
-            <h3>Parallel Coordinates, Parallel Sets and Time Series</h3>
-            <p>
-                In the past lectures, you have been introduced to parallel coordinates and parallel sets, as well as
-                different techniques for visualizing time series data.
-                In this assignment, you're going to visualize weather data using these types of visualizations and
-                connect them using interaction techniques.
-            </p>
-            <p>
-                The weather and stations data is loaded already from the corresponding files in the <span
-                    class="monospace">index.js</span>,
-                and printed to the console. Look carefully at the available data and analyze its attributes to make the
-                best decisions for your design that will allow you to answer the given questions.
-            </p>
-        </section>
-
-
-        <section>
-            <div class="task">
-                <h3>Task: Create a coordinated multi-view to analyze the weather data.</h3>
-                <p>
-                    It is your task to design and implement the visualization system that allows the user to answer the
-                    following questions:
-                <ol>
-                    <li>
-                        In which year and in which weather station has the lowest temperature been recorded?
-                    </li>
-                    <li>
-                        Are there time-based patterns regarding humidity?
-                    </li>
-                    <li>
-                        Is there some kind of relation between temperature and humidity?
-                    </li>
-                    <li>
-                        a) Is air pressure lower by the sea or at continental locations?<br />
-                        b) Is there a difference in air pressure between sea-level stations and mountain-based stations?
-                    </li>
-                </ol>
-                Add any elements that may be necessary in this HTML, in the #visualization div on top.
-                </p>
-
-                <p>
-                <h4>System requirements</h4>
-                Your visualization system should have the following features:
-                <ol>
-                    <li>
-                        A parallel coordinate system (20%).
-                    </li>
-                    <li>
-                        A parallel sets plot (20%).
-                    </li>
-                    <li>
-                        A suitable time visualization (20%).
-                    </li>
-                    <li>
-                        Connect the visualizations with brushing and linking (10%).
-                    </li>
-                    <li>
-                        Filtering items by attribute (10%).
-                    </li>
-                </ol>
-
-                <h4>Support your decisions</h4>
-                <ol>
-                    <li>Describe the marks and channels of each visualization in the <b>marks_and_channels.md</b> (5%).
-                    </li>
-                    <li>Explain your decisions (the type of time series visualization, or the attributes you plotted in
-                        the parallel coordinates and parallel sets) in <b>design_choices.md</b> (5%).</li>
-                    <li>
-                        Answer the 4 questions numbered in the task, explaining how did you find them in your
-                        visualization. Write the answers in the <b>answers.md</b> (10%).
-                    </li>
-                </ol>
-                </p>
+            <div style="margin-top: 40px;">
+                <h3>Q4: Air Pressure vs Geography (Parallel Sets)</h3>
+                <div id="parallel-sets-container" style="overflow-x: auto;"></div>
             </div>
-        </section>
+        </div>
+        <main>
+            <h2>Assignment 3</h2>
+            <div id="visualization" style="display: flex; flex-direction: column; gap: 20px; font-family: sans-serif;">
+                <!--   YOUR SVGs HERE   -->
+                <div id="chart-tooltip" style="
+                position: absolute; 
+                opacity: 0; 
+                background-color: rgba(255, 255, 255, 0.95); 
+                border: 1px solid #333; 
+                padding: 8px; 
+                border-radius: 4px; 
+                font-size: 12px; 
+                pointer-events: none; 
+                box-shadow: 2px 2px 6px rgba(0,0,0,0.2);
+                line-height: 1.4;">
+                </div>
+                <div>
+                    <h3 style="margin-bottom: 5px;">Q1 & Q2: Climate Trends (2011 - 2020)</h3>
+                </div>
 
-        <section>
-            <zero-md src="marks_and_channels.md">
-                <template>
-                    <link rel="stylesheet" href="./style.css" />
-                </template>
-            </zero-md>
-            <zero-md src="design_choices.md">
-                <template>
-                    <link rel="stylesheet" href="./style.css" />
-                </template>
-            </zero-md>
-            <zero-md src="answers.md">
-                <template>
-                    <link rel="stylesheet" href="./style.css" />
-                </template>
-            </zero-md>
-        </section>
+                <div id="timeline-container"></div>
 
-    </main>
+                <div id="timeline-legend"
+                    style="display: flex; flex-direction: column; gap: 15px; background: #fafafa; padding: 15px; border-radius: 6px; border: 1px solid #eaeaea; margin-left: 60px; max-width: 800px;">
+                </div>
+
+                <div id="timeline-container"></div>
+
+                <div style="margin-top: 40px;">
+                    <h3>Q3: Temperature, Humidity, and Pressure Patterns</h3>
+                    <div id="pcp-container" style="overflow-x: auto;"></div>
+                    <div
+                        style="font-size: 0.9em; color: #555; background: #f9f9f9; padding: 10px; border-radius: 5px; margin-top: 10px;">
+                        <strong>Meteorological Scale References:</strong><br>
+                        <em>Temperature</em>: Low (&lt; 5 °C), Medium (5-15 °C), High (&gt; 15 °C) — <em>Based on DWD
+                            (Deutscher Wetterdienst) heating/summer thresholds.</em><br>
+                        <em>Humidity</em>: Low (&lt; 40%), Medium (40-70%), High (&gt; 70%) — <em>Based on ASHRAE
+                            Standard
+                            55 optimal comfort zones.</em><br>
+                        <em>Air Pressure</em>: Low (&lt; 980 hPa), Medium (980-1013 hPa), High (&gt; 1013 hPa) —
+                        <em>Based
+                            on WMO standard sea-level pressure (1013.25 hPa) and typical cyclonic systems.</em>
+                    </div>
+                </div>
+            </div>
+
+            <section>
+                <h3>Parallel Coordinates, Parallel Sets and Time Series</h3>
+                <p>
+                    In the past lectures, you have been introduced to parallel coordinates and parallel sets, as well as
+                    different techniques for visualizing time series data.
+                    In this assignment, you're going to visualize weather data using these types of visualizations and
+                    connect them using interaction techniques.
+                </p>
+                <p>
+                    The weather and stations data is loaded already from the corresponding files in the <span
+                        class="monospace">index.js</span>,
+                    and printed to the console. Look carefully at the available data and analyze its attributes to make
+                    the
+                    best decisions for your design that will allow you to answer the given questions.
+                </p>
+            </section>
+
+
+            <section>
+                <div class="task">
+                    <h3>Task: Create a coordinated multi-view to analyze the weather data.</h3>
+                    <p>
+                        It is your task to design and implement the visualization system that allows the user to answer
+                        the
+                        following questions:
+                    <ol>
+                        <li>
+                            In which year and in which weather station has the lowest temperature been recorded?
+                        </li>
+                        <li>
+                            Are there time-based patterns regarding humidity?
+                        </li>
+                        <li>
+                            Is there some kind of relation between temperature and humidity?
+                        </li>
+                        <li>
+                            a) Is air pressure lower by the sea or at continental locations?<br />
+                            b) Is there a difference in air pressure between sea-level stations and mountain-based
+                            stations?
+                        </li>
+                    </ol>
+                    Add any elements that may be necessary in this HTML, in the #visualization div on top.
+                    </p>
+
+                    <p>
+                    <h4>System requirements</h4>
+                    Your visualization system should have the following features:
+                    <ol>
+                        <li>
+                            A parallel coordinate system (20%).
+                        </li>
+                        <li>
+                            A parallel sets plot (20%).
+                        </li>
+                        <li>
+                            A suitable time visualization (20%).
+                        </li>
+                        <li>
+                            Connect the visualizations with brushing and linking (10%).
+                        </li>
+                        <li>
+                            Filtering items by attribute (10%).
+                        </li>
+                    </ol>
+
+                    <h4>Support your decisions</h4>
+                    <ol>
+                        <li>Describe the marks and channels of each visualization in the <b>marks_and_channels.md</b>
+                            (5%).
+                        </li>
+                        <li>Explain your decisions (the type of time series visualization, or the attributes you plotted
+                            in
+                            the parallel coordinates and parallel sets) in <b>design_choices.md</b> (5%).</li>
+                        <li>
+                            Answer the 4 questions numbered in the task, explaining how did you find them in your
+                            visualization. Write the answers in the <b>answers.md</b> (10%).
+                        </li>
+                    </ol>
+                    </p>
+                </div>
+            </section>
+
+            <section>
+                <zero-md src="marks_and_channels.md">
+                    <template>
+                        <link rel="stylesheet" href="./style.css" />
+                    </template>
+                </zero-md>
+                <zero-md src="design_choices.md">
+                    <template>
+                        <link rel="stylesheet" href="./style.css" />
+                    </template>
+                </zero-md>
+                <zero-md src="answers.md">
+                    <template>
+                        <link rel="stylesheet" href="./style.css" />
+                    </template>
+                </zero-md>
+            </section>
+
+        </main>
 </body>
 
 
