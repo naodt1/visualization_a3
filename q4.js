@@ -1,5 +1,5 @@
 import * as d3 from 'd3';
-import { sankey, sankeyLinkHorizontal } from 'd3-sankey';
+import { sankey } from 'd3-sankey';
 
 export function createParallelSets(dailyClimateData, stationData) {
     // -------------------------------------------------------------------------
@@ -21,8 +21,7 @@ export function createParallelSets(dailyClimateData, stationData) {
         return station.HEIGHT_ABOVE_SEA_LEVEL_M < 200 ? "Lowland" : "Mountain";
     }
 
-    // We will track the full path for each record so we can split the ribbons
-    // and color them consistently by the initial Air Pressure category
+    // Track the full path so we can split ribbons and highlight them interactively
     const fullPaths = {};
 
     dailyClimateData.forEach(d => {
@@ -35,7 +34,6 @@ export function createParallelSets(dailyClimateData, stationData) {
         const loc = getLocationCat(st);
         const elev = getElevationCat(st);
 
-        // Track the entire specific combination
         const key = `${press}|${loc}|${elev}`;
         fullPaths[key] = (fullPaths[key] || 0) + 1;
     });
@@ -44,9 +42,9 @@ export function createParallelSets(dailyClimateData, stationData) {
     // 2. BUILD NODES AND LINKS ARRAYS
     // -------------------------------------------------------------------------
     const nodeNames = [
-        "Low Pressure", "Medium Pressure", "High Pressure", // Layer 1
-        "Coastal", "Continental",                           // Layer 2
-        "Lowland", "Mountain"                               // Layer 3
+        "Low Pressure", "Medium Pressure", "High Pressure",
+        "Coastal", "Continental",
+        "Lowland", "Mountain"
     ];
     
     const nodes = nodeNames.map(name => ({ name }));
@@ -54,8 +52,6 @@ export function createParallelSets(dailyClimateData, stationData) {
 
     const links = [];
 
-    // By splitting the links up by their full path, d3-sankey will draw individual ribbons 
-    // that run all the way through the nodes, allowing us to color them by Air Pressure!
     Object.entries(fullPaths).forEach(([key, count]) => {
         const [press, loc, elev] = key.split('|');
 
@@ -64,7 +60,8 @@ export function createParallelSets(dailyClimateData, stationData) {
             source: nodeIndex[press],
             target: nodeIndex[loc],
             value: count,
-            pressureCategory: press // Store this to color the ribbon
+            pressureCategory: press,
+            fullPath: key 
         });
 
         // Link 2: Location -> Elevation
@@ -72,16 +69,18 @@ export function createParallelSets(dailyClimateData, stationData) {
             source: nodeIndex[loc],
             target: nodeIndex[elev],
             value: count,
-            pressureCategory: press // Keep the exact same color!
+            pressureCategory: press,
+            fullPath: key 
         });
     });
 
     // -------------------------------------------------------------------------
-    // 3. DIMENSIONS AND CANVAS SETUP
+    // 3. DIMENSIONS AND CANVAS SETUP (VERTICAL LAYOUT)
     // -------------------------------------------------------------------------
-    const margin = { top: 20, right: 100, bottom: 20, left: 100 };
+    const margin = { top: 40, right: 20, bottom: 40, left: 20 };
+    // We keep a wide aspect ratio since it's going top to bottom now
     const width = 900 - margin.left - margin.right;
-    const height = 400 - margin.top - margin.bottom;
+    const height = 500 - margin.top - margin.bottom;
 
     d3.select("#parallel-sets-container").html("");
 
@@ -92,9 +91,6 @@ export function createParallelSets(dailyClimateData, stationData) {
         .append("g")
         .attr("transform", `translate(${margin.left},${margin.top})`);
 
-    // Define specific colors for Pressure so they are consistent and recognizable
-    // Use a unified, clean palette. 
-    // Pressure gets distinct colors (Green/Orange/Red), while geographical nodes act as neutral structural anchors.
     const color = d3.scaleOrdinal()
         .domain([
             "Low Pressure", "Medium Pressure", "High Pressure", 
@@ -105,10 +101,10 @@ export function createParallelSets(dailyClimateData, stationData) {
             "#2ecc71", // Low Pressure: Green
             "#f39c12", // Medium Pressure: Orange
             "#e74c3c", // High Pressure: Red
-            "#555555", // Coastal: Neutral Dark
-            "#555555", // Continental: Neutral Dark
-            "#555555", // Lowland: Neutral Dark
-            "#555555"  // Mountain: Neutral Dark
+            "#555555", // Neutral structural anchors
+            "#555555",
+            "#555555",
+            "#555555"
         ]);
 
     const nodeOrder = {
@@ -124,11 +120,13 @@ export function createParallelSets(dailyClimateData, stationData) {
     // -------------------------------------------------------------------------
     // 4. SANKEY LAYOUT CONFIGURATION
     // -------------------------------------------------------------------------
+    // Note: We swap width and height in the extent!
+    // Flow is along the first coordinate (now height), transverse is along the second (now width)
     const sankeyLayout = sankey()
         .nodeWidth(20)
-        .nodePadding(30)
+        .nodePadding(40)
         .nodeSort((a, b) => nodeOrder[a.name] - nodeOrder[b.name])
-        .extent([[0, 0], [width, height]]);
+        .extent([[0, 0], [height, width]]);
 
     const { nodes: sankeyNodes, links: sankeyLinks } = sankeyLayout({
         nodes: nodes.map(d => Object.assign({}, d)),
@@ -136,55 +134,112 @@ export function createParallelSets(dailyClimateData, stationData) {
     });
 
     // -------------------------------------------------------------------------
-    // 5. DRAW LINKS (RIBBONS)
+    // 5. DRAW LINKS (VERTICAL RIBBONS)
     // -------------------------------------------------------------------------
-    const link = svg.append("g")
-        .attr("fill", "none")
-        .selectAll("g")
+    // Custom vertical ribbon generator (draws a filled area instead of a thick stroke
+    // to prevent SVG stroke distortion artifacts on wide overlapping curves)
+    function sankeyRibbonVertical(d) {
+        const w = d.width;
+        // The transverse center coordinates
+        const y0_center = d.y0; 
+        const y1_center = d.y1;
+        
+        // Left and right edges of the ribbon
+        const x0_left = y0_center - w / 2;
+        const x0_right = y0_center + w / 2;
+        const x1_left = y1_center - w / 2;
+        const x1_right = y1_center + w / 2;
+        
+        // The flow coordinates (top and bottom)
+        const y0 = d.source.x1;
+        const y1 = d.target.x0;
+        const halfY = (y0 + y1) / 2;
+        
+        return `
+            M ${x0_left} ${y0}
+            C ${x0_left} ${halfY}, ${x1_left} ${halfY}, ${x1_left} ${y1}
+            L ${x1_right} ${y1}
+            C ${x1_right} ${halfY}, ${x0_right} ${halfY}, ${x0_right} ${y0}
+            Z
+        `;
+    }
+
+    const totalRecords = Object.values(fullPaths).reduce((a, b) => a + b, 0);
+
+    const linkPaths = svg.append("g")
+        .selectAll("path")
         .data(sankeyLinks)
-        .join("g")
-        .style("mix-blend-mode", "multiply");
+        .join("path")
+        .style("mix-blend-mode", "multiply")
+        .attr("d", sankeyRibbonVertical)
+        .attr("fill", d => color(d.pressureCategory))
+        .attr("fill-opacity", 0.5)
+        .attr("stroke", "none");
 
-    link.append("path")
-        .attr("d", sankeyLinkHorizontal())
-        // Color the link consistently by its originating Pressure category
-        .attr("stroke", d => color(d.pressureCategory))
-        .attr("stroke-width", d => Math.max(1, d.width))
-        .attr("stroke-opacity", 0.5)
-        .on("mouseover", function(event, d) {
-            d3.select(this).attr("stroke-opacity", 0.9);
-        })
-        .on("mouseout", function() {
-            d3.select(this).attr("stroke-opacity", 0.5);
-        })
-        .append("title")
-        .text(d => `${d.source.name} → ${d.target.name}\n${d.value.toLocaleString()} records\n(From ${d.pressureCategory})`);
+    linkPaths.append("title")
+        .text(d => `${d.source.name} → ${d.target.name}\n${d.value.toLocaleString()} records (${((d.value / totalRecords) * 100).toFixed(1)}% of total)\n(From ${d.pressureCategory})`);
 
     // -------------------------------------------------------------------------
-    // 6. DRAW NODES (RECTANGLES)
+    // 6. DRAW NODES (RECTANGLES) & INTERACTION
     // -------------------------------------------------------------------------
+    let selectedNode = null;
+    
+    // Add a dynamic info text at the top right of the chart
+    const infoText = svg.append("text")
+        .attr("x", width)
+        .attr("y", -25) // Moved higher to prevent overlapping with top node labels
+        .attr("text-anchor", "end")
+        .style("font-size", "14px")
+        .style("font-weight", "bold")
+        .style("fill", "#555")
+        .text("Click a node to see details");
+
     const node = svg.append("g")
         .selectAll("g")
         .data(sankeyNodes)
-        .join("g");
+        .join("g")
+        .style("cursor", "pointer")
+        .on("click", function(event, d) {
+            // Toggle selection logic
+            if (selectedNode === d.name) {
+                selectedNode = null; // Deselect
+                linkPaths.transition().duration(200).attr("fill-opacity", 0.5);
+                node.transition().duration(200).attr("opacity", 1);
+                infoText.text("Click a node to see details");
+            } else {
+                selectedNode = d.name; // Select
+                
+                // Calculate percentage
+                const percentage = ((d.value / totalRecords) * 100).toFixed(1);
+                infoText.text(`${d.name}: ${d.value.toLocaleString()} records (${percentage}% of total)`);
+
+                // Dim links that do not pass through this node
+                linkPaths.transition().duration(200).attr("fill-opacity", linkData => {
+                    return linkData.fullPath.includes(selectedNode) ? 0.9 : 0.05;
+                });
+            }
+        });
 
     node.append("rect")
-        .attr("x", d => d.x0)
-        .attr("y", d => d.y0)
-        .attr("height", d => d.y1 - d.y0)
-        .attr("width", d => d.x1 - d.x0)
+        // Swap x and y logic due to the inverted extent trick
+        .attr("x", d => d.y0)
+        .attr("y", d => d.x0)
+        .attr("width", d => d.y1 - d.y0)
+        .attr("height", d => d.x1 - d.x0)
         .attr("fill", d => color(d.name))
-        .attr("stroke", "#555")
+        .attr("stroke", "#333")
         .append("title")
-        .text(d => `${d.name}\n${d.value.toLocaleString()} records`);
+        .text(d => `Click to filter: ${d.name}\n${d.value.toLocaleString()} records (${((d.value / totalRecords) * 100).toFixed(1)}% of total)`);
 
     node.append("text")
-        .attr("x", d => d.x0 < width / 2 ? d.x1 + 8 : d.x0 - 8)
-        .attr("y", d => (d.y1 + d.y0) / 2)
-        .attr("dy", "0.35em")
-        .attr("text-anchor", d => d.x0 < width / 2 ? "start" : "end")
+        // Center text horizontally on the node
+        .attr("x", d => (d.y0 + d.y1) / 2)
+        // Place text above the top layer, and below the bottom layer
+        .attr("y", d => d.x0 < height / 2 ? d.x0 - 10 : d.x1 + 15)
+        .attr("text-anchor", "middle")
         .text(d => d.name)
         .style("font-size", "14px")
         .style("font-weight", "bold")
-        .style("fill", "#333");
+        .style("fill", "#333")
+        .style("pointer-events", "none"); // don't interfere with click
 }
