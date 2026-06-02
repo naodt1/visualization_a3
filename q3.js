@@ -2,7 +2,7 @@ import * as d3 from 'd3';
 
 export function createParallelCoordinates(dailyClimateData, stationData) {
     // -------------------------------------------------------------------------
-    // 1. DATA PRE-PROCESSING & CATEGORIZATION
+    // 1. DATA PRE-PROCESSING
     // -------------------------------------------------------------------------
     const stationMap = new Map(stationData.map(s => [s.STATION_ID, s.STATION_NAME]));
 
@@ -21,27 +21,13 @@ export function createParallelCoordinates(dailyClimateData, stationData) {
             const avgPressure = d3.mean(days, d => d.PRESSURE_AIR);
             
             if (avgTemp !== undefined && avgHumidity !== undefined && avgPressure !== undefined) {
-                // Categorize into 1 (Low), 2 (Medium), 3 (High) based on meteorological standards
-                let tempLevel = avgTemp > 15 ? 3 : (avgTemp >= 5 ? 2 : 1);
-                let humLevel = avgHumidity > 70 ? 3 : (avgHumidity >= 40 ? 2 : 1);
-                let pressLevel = avgPressure > 1013 ? 3 : (avgPressure >= 980 ? 2 : 1);
-
-                // We add a small random jitter so lines don't completely overlap
-                const jitter = () => (Math.random() - 0.5) * 0.3;
-
                 aggregatedData.push({
                     stationId: stationId,
                     stationName: stationName,
                     yearMonth: yearMonth,
-                    "Temperature": tempLevel + jitter(),
-                    "Humidity": humLevel + jitter(),
-                    "Air Pressure": pressLevel + jitter(),
-                    // Store raw values for the tooltip
-                    rawTemp: avgTemp,
-                    rawHum: avgHumidity,
-                    rawPress: avgPressure,
-                    // Store the base temp level to determine line color
-                    baseTempLevel: tempLevel 
+                    "Temperature": avgTemp,
+                    "Humidity": avgHumidity,
+                    "Air Pressure": avgPressure
                 });
             }
         });
@@ -65,11 +51,9 @@ export function createParallelCoordinates(dailyClimateData, stationData) {
         .append("g")
         .attr("transform", `translate(${margin.left},${margin.top})`);
 
-    // Create a color scale based on the Temperature level
-    // 1 = Low (Blue), 2 = Medium (Orange), 3 = High (Red)
-    const colorScale = d3.scaleOrdinal()
-        .domain([1, 2, 3])
-        .range(["#3498db", "#e67e22", "#e74c3c"]);
+    // Create a continuous color scale based on Temperature
+    const colorScale = d3.scaleSequential(d3.interpolateTurbo)
+        .domain(d3.extent(aggregatedData, d => d["Temperature"]));
 
     // Create Tooltip
     const tooltip = d3.select("body").append("div")
@@ -92,9 +76,9 @@ export function createParallelCoordinates(dailyClimateData, stationData) {
 
     const yScales = {};
     dimensions.forEach(dim => {
-        // We use a linear scale from 0.5 to 3.5 to give breathing room for the jittered 1, 2, 3 values
+        // Quantitative scale based on min/max of the data
         yScales[dim] = d3.scaleLinear()
-            .domain([0.5, 3.5])
+            .domain(d3.extent(aggregatedData, d => d[dim]))
             .range([height, 0]);
     });
 
@@ -117,8 +101,8 @@ export function createParallelCoordinates(dailyClimateData, stationData) {
         .attr("class", d => `pcp-line pcp-line-${d.stationId}`)
         .attr("d", path)
         .style("fill", "none")
-        // Color lines based on their temperature scale level
-        .style("stroke", d => colorScale(d.baseTempLevel))
+        // Color lines based on their exact temperature value
+        .style("stroke", d => colorScale(d["Temperature"]))
         .style("stroke-width", 1.5)
         .style("opacity", 0.4)
         .on("mouseover", function(event, d) {
@@ -133,9 +117,9 @@ export function createParallelCoordinates(dailyClimateData, stationData) {
             tooltip.html(`
                 <strong>${d.stationName}</strong> (${d.yearMonth})<br/>
                 <hr style="margin: 4px 0; border-top: 1px solid #ddd;" />
-                Temperature: ${d.rawTemp.toFixed(1)} °C<br/>
-                Humidity: ${d.rawHum.toFixed(1)} %<br/>
-                Pressure: ${d.rawPress.toFixed(1)} hPa
+                Temperature: ${d["Temperature"].toFixed(1)} °C<br/>
+                Humidity: ${d["Humidity"].toFixed(1)} %<br/>
+                Pressure: ${d["Air Pressure"].toFixed(1)} hPa
             `)
             .style("left", (event.pageX + 15) + "px")
             .style("top", (event.pageY - 28) + "px");
@@ -166,21 +150,10 @@ export function createParallelCoordinates(dailyClimateData, stationData) {
         .attr("class", "dimension")
         .attr("transform", d => `translate(${xScale(d)},0)`);
 
-    const tickFormatter = (val) => {
-        if (val === 1) return "Low";
-        if (val === 2) return "Medium";
-        if (val === 3) return "High";
-        return "";
-    };
-
     axes.append("g")
         .each(function(d) { 
-            d3.select(this).call(
-                d3.axisLeft()
-                  .scale(yScales[d])
-                  .tickValues([1, 2, 3])
-                  .tickFormat(tickFormatter)
-            ); 
+            // Standard linear numeric axes
+            d3.select(this).call(d3.axisLeft().scale(yScales[d])); 
         })
         .append("text")
         .style("text-anchor", "middle")

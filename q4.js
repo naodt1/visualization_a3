@@ -136,42 +136,58 @@ export function createParallelSets(dailyClimateData, stationData) {
     // -------------------------------------------------------------------------
     // 5. DRAW LINKS (VERTICAL RIBBONS)
     // -------------------------------------------------------------------------
-    // Custom vertical link generator
-    function sankeyLinkVertical(d) {
-        const x0 = d.y0;           // Link's transverse (horizontal) start
-        const y0 = d.source.x1;    // Link's flow (vertical) start (bottom of source node)
-        const x1 = d.y1;           // Link's transverse (horizontal) end
-        const y1 = d.target.x0;    // Link's flow (vertical) end (top of target node)
+    // Custom vertical ribbon generator (draws a filled area instead of a thick stroke
+    // to prevent SVG stroke distortion artifacts on wide overlapping curves)
+    function sankeyRibbonVertical(d) {
+        const w = d.width;
+        // The transverse center coordinates
+        const y0_center = d.y0; 
+        const y1_center = d.y1;
+        
+        // Left and right edges of the ribbon
+        const x0_left = y0_center - w / 2;
+        const x0_right = y0_center + w / 2;
+        const x1_left = y1_center - w / 2;
+        const x1_right = y1_center + w / 2;
+        
+        // The flow coordinates (top and bottom)
+        const y0 = d.source.x1;
+        const y1 = d.target.x0;
         const halfY = (y0 + y1) / 2;
-        return `M${x0},${y0} C${x0},${halfY} ${x1},${halfY} ${x1},${y1}`;
+        
+        return `
+            M ${x0_left} ${y0}
+            C ${x0_left} ${halfY}, ${x1_left} ${halfY}, ${x1_left} ${y1}
+            L ${x1_right} ${y1}
+            C ${x1_right} ${halfY}, ${x0_right} ${halfY}, ${x0_right} ${y0}
+            Z
+        `;
     }
 
+    const totalRecords = Object.values(fullPaths).reduce((a, b) => a + b, 0);
+
     const linkPaths = svg.append("g")
-        .attr("fill", "none")
         .selectAll("path")
         .data(sankeyLinks)
         .join("path")
         .style("mix-blend-mode", "multiply")
-        .attr("d", sankeyLinkVertical)
-        .attr("stroke", d => color(d.pressureCategory))
-        .attr("stroke-width", d => Math.max(1, d.width))
-        .attr("stroke-opacity", 0.5);
+        .attr("d", sankeyRibbonVertical)
+        .attr("fill", d => color(d.pressureCategory))
+        .attr("fill-opacity", 0.5)
+        .attr("stroke", "none");
 
     linkPaths.append("title")
-        .text(d => `${d.source.name} → ${d.target.name}\n${d.value.toLocaleString()} records\n(From ${d.pressureCategory})`);
+        .text(d => `${d.source.name} → ${d.target.name}\n${d.value.toLocaleString()} records (${((d.value / totalRecords) * 100).toFixed(1)}% of total)\n(From ${d.pressureCategory})`);
 
     // -------------------------------------------------------------------------
     // 6. DRAW NODES (RECTANGLES) & INTERACTION
     // -------------------------------------------------------------------------
     let selectedNode = null;
     
-    // Calculate total records (sum of Layer 1 nodes is sufficient, or sum of all fullPaths)
-    const totalRecords = Object.values(fullPaths).reduce((a, b) => a + b, 0);
-
     // Add a dynamic info text at the top right of the chart
     const infoText = svg.append("text")
         .attr("x", width)
-        .attr("y", -10)
+        .attr("y", -25) // Moved higher to prevent overlapping with top node labels
         .attr("text-anchor", "end")
         .style("font-size", "14px")
         .style("font-weight", "bold")
@@ -187,7 +203,7 @@ export function createParallelSets(dailyClimateData, stationData) {
             // Toggle selection logic
             if (selectedNode === d.name) {
                 selectedNode = null; // Deselect
-                linkPaths.transition().duration(200).attr("stroke-opacity", 0.5);
+                linkPaths.transition().duration(200).attr("fill-opacity", 0.5);
                 node.transition().duration(200).attr("opacity", 1);
                 infoText.text("Click a node to see details");
             } else {
@@ -198,7 +214,7 @@ export function createParallelSets(dailyClimateData, stationData) {
                 infoText.text(`${d.name}: ${d.value.toLocaleString()} records (${percentage}% of total)`);
 
                 // Dim links that do not pass through this node
-                linkPaths.transition().duration(200).attr("stroke-opacity", linkData => {
+                linkPaths.transition().duration(200).attr("fill-opacity", linkData => {
                     return linkData.fullPath.includes(selectedNode) ? 0.9 : 0.05;
                 });
             }
@@ -213,7 +229,7 @@ export function createParallelSets(dailyClimateData, stationData) {
         .attr("fill", d => color(d.name))
         .attr("stroke", "#333")
         .append("title")
-        .text(d => `Click to filter: ${d.name}\n${d.value.toLocaleString()} records`);
+        .text(d => `Click to filter: ${d.name}\n${d.value.toLocaleString()} records (${((d.value / totalRecords) * 100).toFixed(1)}% of total)`);
 
     node.append("text")
         // Center text horizontally on the node
