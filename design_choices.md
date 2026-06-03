@@ -1,17 +1,19 @@
 ### Design Choice
 
 #### Which time-based visualization did you choose?
-For Q1 and Q2, we chose a Line Chart to visualize the climate trends over the years.
-For Q3, we chose a Parallel Coordinates plot to visualize the temperature, humidity, and pressure patterns.
-For Q4, we chose a Parallel Sets plot to visualize the air pressure vs geography.
+We chose the line chart to visualize the climate trends over the years.
 
 #### Why did you choose this visualization?
-For Q1, we choce Line chart since it allows to see the trend of temperature over the years since the question was asking lowest temperature throughout the years. This also applies to Q2, we used multiple series line chart to compare the trends of humidity over the years for different stations due to the question asking "patterns" which can be clearly seen in line chart.
-For Q3, we chose Parallel Coordinates as the question asks "relation between" temperature and humidity, we can see the correlation between temperature and humidity, it also allows us to see the pressure patterns and compare them with temperature and humidity.
-For Q4, we chose Parallel Sets as it allows to visualize the distribution of pressure and location (sea or mountain based) and to compare teh differences.
+Question 1 required us to find the year and station where the lowest temperature was recorded. To answer this we found the minimum temperature recorded by each station for every year. hen, for each station we plotted a separate line, Having separate lines helped us quickly find where and when the min temp was recorded.
+
+Similarly, for Question 2 we were required to visualize changes in humididty over time and also fins of there were any seasonal patterns. We first divided our data in four seasons. We understand that humidity can be very different in winter and summer so an overall mean humidity value will hide the details. For each season, we then computed the mean humidity level every year. This allowed us to clearly see how humidity differs across seasons and how this changed over time.
 
 #### What attributes did you choose to visualize in the parallel coordinates plot and why?
-For the parallel coordinate we chose to visaulize the temperature, humidity and air pressure becuase the question asks "relation between" temperature and humidity, we can see the correlation between them.
+For the parallel coordinate we chose to visaulize the temperature, humidity and air pressure on the parallel axes. The question asked us to discover any relationship between temperature and humidity. Parallel coordinates is a great way to visualize relationshps. If the lines intersect, that means there is an inverse relationship. If there is similar ordering, then there is a positive relation. We also added air pressure in our parallel cooridnate plot. We thought it would be interesting to see if there are any clusters or outliers.
 
 #### What attributes did you choose to visualize in the parallel sets and why?
-For the parallel sets, we binned the temperature, humidity and air pressure and visualized them along with the locations like: coastal or continental. This allows us to see the distribution of pressure and location (sea or mountain based) and to compare the differences.
+For the parallel sets, we chose air pressure, distance from sea (km) and height above sea level (m). However, this type of visualization is best for sets. Therefore, we binned our data into sets. We performed threshold binning based on meteorological scales and other experts.
+1. Air pressure is divided into 3 sets, low, medium and high.
+2. Distance from sea (km) is divided into 2 sets, coastal (< 100km) and continental. This is standardized by a UN body called [IPCC](https://www.ipcc.ch/).
+3. Height above sea level (m) is divided into 2 sets, lowland (< 200m) and mountain. This is referenced in Körner, C. et al. (2011). Mountain biodiversity, its causes and function. GMBA, University of Bern.
+We chose air pressure as the axis on top as the question required us to visualize and compare the distribution of air pressure in different regions. 
